@@ -5,7 +5,7 @@
 package main
 
 import (
-	"flag"
+	"bufio"
 	"fmt"
 	"html/template"
 	"log"
@@ -17,9 +17,10 @@ import (
 	"github.com/codegangsta/cli"
 )
 
-var addr = flag.String("addr", ":1984", "http service address")
+var project = ""
 
-var templ = template.Must(template.New("dash").Parse(templateStr))
+var headerTempl = template.Must(template.New("dash").Parse(headerStr))
+var footerTempl = template.Must(template.New("dash").Parse(footerStr))
 
 func fixProjectName(c *cli.Context) string {
 	if c.String("projectname") == "" {
@@ -28,15 +29,76 @@ func fixProjectName(c *cli.Context) string {
 			var wd = path.Base(cwd)
 			fmt.Printf("cwd = %s\n", cwd)
 			fmt.Printf("wd = %s\n", wd)
+			project = wd
 			return wd
 		}
+		project = "unknown"
 		return ""
 	}
+	project = c.String("projectname")
 	return c.String("projectname")
 }
 
-func dash(w http.ResponseWriter, req *http.Request) {
-	templ.Execute(w, req.FormValue("s"))
+func handler(w http.ResponseWriter, req *http.Request) {
+	headerTempl.Execute(w, req.FormValue("s"))
+	fmt.Fprintf(w, "<h3> for project %s </h3>", project)
+
+	// now show each container as a box?
+	cmd := exec.Command("fig", "ps")
+	cmd.Stdin = os.Stdin
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return
+	}
+
+	// start the command after having set up the pipe
+	if err := cmd.Start(); err != nil {
+		return
+	}
+
+	// read command's stdout line by line
+	in := bufio.NewScanner(stdout)
+
+	fmt.Fprintf(w, "<pre><samp>")
+	for in.Scan() {
+		fmt.Fprintf(w, in.Text()) // write each line to your log, or anything you need
+		fmt.Fprintf(w, "<br/>")
+	}
+	if err := in.Err(); err != nil {
+		log.Printf("error: %s", err)
+	}
+	cmd.Stderr = os.Stderr
+	//cmd.Run()
+	fmt.Fprintf(w, "</samp></pre>")
+
+	footerTempl.Execute(w, req.FormValue("s"))
+}
+
+func killHandler(w http.ResponseWriter, req *http.Request) {
+	headerTempl.Execute(w, req.FormValue("s"))
+	fmt.Fprintf(w, "<h3> for project %s </h3>", project)
+	// now kill all fig services
+	fmt.Fprintf(w, "<h1>KILLing all services for %s</h1>", project)
+
+	footerTempl.Execute(w, req.FormValue("s"))
+}
+
+func stopHandler(w http.ResponseWriter, req *http.Request) {
+	headerTempl.Execute(w, req.FormValue("s"))
+	fmt.Fprintf(w, "<h3> for project %s </h3>", project)
+	// now stop each container
+	fmt.Fprintf(w, "<h1>STOPing all services for %s</h1>", project)
+
+	footerTempl.Execute(w, req.FormValue("s"))
+}
+
+func startHandler(w http.ResponseWriter, req *http.Request) {
+	headerTempl.Execute(w, req.FormValue("s"))
+	fmt.Fprintf(w, "<h3> for project %s </h3>", project)
+	// now start each container
+	fmt.Fprintf(w, "<h1>STARTing all services for %s</h1>", project)
+
+	footerTempl.Execute(w, req.FormValue("s"))
 }
 
 func main() {
@@ -142,48 +204,36 @@ func main() {
 			Name:  "web",
 			Usage: "Enable web monitoring on http://localhost/1984/PROJECTNAME.",
 			Action: func(c *cli.Context) {
-				flag.Parse()
 				var pn = fixProjectName(c)
 				if pn == "" {
 					pn = "unknown"
 				}
 				fmt.Printf("Starting web Fig Dashboard at http://localhost:1984/%s\n", pn)
 				fmt.Printf("use Ctrl-C to exit\n")
-				http.Handle("/"+pn, http.HandlerFunc(dash))
-				err := http.ListenAndServe(*addr, nil)
+				http.HandleFunc("/"+pn, handler) // default
+				http.HandleFunc("/"+pn+"/kill", killHandler)
+				http.HandleFunc("/"+pn+"/stop", stopHandler)
+				http.HandleFunc("/"+pn+"/start", startHandler)
+				err := http.ListenAndServe(":1984", nil)
 				if err != nil {
 					log.Fatal("ListenAndServe:", err)
 				}
-
-
-				//x.Run()
 			},
 		},
 		// up - NOT supported - due to logs
-
 	}
 	app.Run(os.Args)
 }
 
-const templateStr = `
+const headerStr = `
 <html>
 <head>
 <title>Fig Dashboard</title>
 </head>
 <body>
 <h2>Fig Dashboard v 0.0.1</h2>
-<h3> for project </h3>
-{{if .}}
-<img src="http://chart.apis.google.com/chart?chs=300x300&cht=qr&choe=UTF-8&chl={{.}}" />
-<br>
-{{.}}
-<br>
-<br>
-{{end}}
-<form action="/" name=f method="GET"><input maxLength=1024 size=70
-name=s value="" title="Text to QR Encode"><input type=submit
-value="Refresh" name=dash>
-</form>
+`
+const footerStr = `
 </body>
 </html>
 `
