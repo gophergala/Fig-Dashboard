@@ -1,4 +1,6 @@
 // main.go for figdash web tool
+// as not API in Fig, built up Fig commands with commend line calls to Docker commands
+// could make similar calls to Fig for future commands
 //
 
 package main
@@ -8,7 +10,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"sort"
 	"text/tabwriter"
 
 	"github.com/codegangsta/cli"
@@ -40,27 +41,6 @@ func logsCmd(services []*service, c *cli.Context) {
 	}
 	if total > 0 {
 		for line := range ch {
-			fmt.Println(line)
-		}
-	}
-}
-
-func upCmd(services []*service, c *cli.Context) {
-	daemon := c.Bool("d")
-	verbose := c.GlobalBool("verbose")
-	var logsCh chan string
-	if !daemon {
-		logsCh = make(chan string)
-	}
-
-	sort.Sort(ByServiceDependency(services))
-	for _, s := range services {
-		if err := s.run(logsCh, daemon, verbose); err != nil {
-			log.Fatal(err)
-		}
-	}
-	if logsCh != nil {
-		for line := range logsCh {
 			fmt.Println(line)
 		}
 	}
@@ -222,17 +202,7 @@ func main() {
 			Usage:  "Stop existing containers without removing them.",
 			Action: createAction(stopCmd),
 		},
-		{
-			Name:   "up",
-			Usage:  "Build, (re)create, start and attach to containers for a service.",
-			Action: createAction(upCmd),
-			Flags: []cli.Flag{
-				cli.BoolFlag{
-					Name:  "d",
-					Usage: "Detached mode: Run containers in the background",
-				},
-			},
-		},
+                // up - NOT supported - due to logs
 	}
 	app.Run(os.Args)
 }

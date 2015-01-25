@@ -1,13 +1,12 @@
+// services.go - fig commend support
 package main
 
 import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path"
 	"regexp"
-	"sort"
 	"strings"
 	"unicode"
 )
@@ -15,8 +14,8 @@ import (
 type service struct {
 	name        string
 	namespace   string
-	Build       string            `yaml:"build"`
-	Command     string            `yaml:"command"`
+	Build       string            `yaml:"build"`      // not supported as a command
+	Command     string            `yaml:"command"`    // not supported as a command
 	Image       string            `yaml:"image"`
 	Ports       []string          `yaml:"ports"`
 	Links       []string          `yaml:"links"`
@@ -69,24 +68,6 @@ func (s *service) init(name string, serviceMap map[string]*service) {
 			s.linkedServices = append(s.linkedServices, link)
 		}
 	}
-}
-
-func (s *service) build(verbose bool) error {
-	if s.Image != "" {
-		fmt.Printf("%s uses image, skipping...\n", s.name)
-		return nil
-	}
-	fmt.Printf("building %s\n", s)
-	cmd := exec.Command("docker", "build", fmt.Sprintf("--tag=\"%s\"", s), s.Build)
-	if verbose {
-		fmt.Printf("%s\n", strings.Trim(fmt.Sprint(cmd.Args), "[]"))
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-	}
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-	return nil
 }
 
 func (s *service) run(logsCh chan<- string, daemon, verbose bool) error {
@@ -148,50 +129,6 @@ func (s *service) logs(ch chan<- string, timestamps, verbose bool) (int, error) 
 	return count, nil
 }
 
-func (s *service) scale(n int, verbose bool) error {
-	sort.Sort(ByIndex(s.containers))
-	addContainer := func(i int) error {
-		c := newContainer(s, i)
-		s.containers = append(s.containers, c)
-		fmt.Printf("creating %s...\n", c.name)
-		err := c.run(nil, true, verbose)
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-
-	// add containers
-	if n > len(s.containers) {
-		left := n - len(s.containers)
-		offset := 0
-		for i, c := range s.containers {
-			if i+1+offset != c.index {
-				offset++
-				if err := addContainer(i + 1); err != nil {
-					return err
-				}
-				left--
-				if left <= 0 {
-					return nil
-				}
-			}
-		}
-		for i := len(s.containers); left > 0; i, left = i+1, left-1 {
-			if err := addContainer(i + 1); err != nil {
-				return err
-			}
-		}
-		// remove containers
-	} else if n < len(s.containers) {
-		for _, c := range s.containers[n:] {
-			fmt.Printf("removing %s...\n", c.name)
-			c.rmf(verbose)
-		}
-	}
-	return nil
-}
-
 func (s *service) rmf(verbose bool) {
 	for _, c := range s.containers {
 		fmt.Printf("removing %s...\n", c.name)
@@ -218,16 +155,16 @@ func (s *service) isLinked(s2 *service) bool {
 }
 
 // sort services by linked dependencies
-type ByServiceDependency []*service
+//type ByServiceDependency []*service
 
-func (s ByServiceDependency) Len() int {
-	return len(s)
-}
+//func (s ByServiceDependency) Len() int {
+//	return len(s)
+//}
 
-func (s ByServiceDependency) Less(i, j int) bool {
-	return !s[i].isLinked(s[j])
-}
+//func (s ByServiceDependency) Less(i, j int) bool {
+//	return !s[i].isLinked(s[j])
+//}
 
-func (s ByServiceDependency) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
+//func (s ByServiceDependency) Swap(i, j int) {
+//	s[i], s[j] = s[j], s[i]
+//}

@@ -1,5 +1,5 @@
 // container.go - use commend line to call Docker commands for now
-// should make this us APIs in the future.
+// should make this use APIs in the future.
 
 package main
 

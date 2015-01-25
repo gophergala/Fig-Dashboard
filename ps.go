@@ -1,3 +1,4 @@
+// ps.go - supports fig ps command
 package main
 
 import (
