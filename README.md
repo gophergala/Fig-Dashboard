@@ -11,9 +11,6 @@ USAGE:
 VERSION:
    0.0.1
 
-AUTHOR:
-  Author - <mkobar@rkosecurity.com>
-
 COMMANDS:
    kill		Force stop service containers.
    ps		List containers
